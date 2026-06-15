@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>序號工坊 🎰</title>
+
+<!-- PWA / 加入主畫面設定 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="序號工坊">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="序號工坊">
+<meta name="theme-color" content="#A855F7">
+<!-- 圖示由JS動態產生 -->
+<script>
+(function(){
+  const s = 512;
+  const cv = document.createElement('canvas');
+  cv.width = s; cv.height = s;
+  const ctx = cv.getContext('2d');
+
+  // 圓角矩形底（深紫漸層）
+  const r = 112;
+  ctx.beginPath();
+  ctx.moveTo(r,0); ctx.lineTo(s-r,0); ctx.arcTo(s,0,s,r,r);
+  ctx.lineTo(s,s-r); ctx.arcTo(s,s,s-r,s,r);
+  ctx.lineTo(r,s); ctx.arcTo(0,s,0,s-r,r);
+  ctx.lineTo(0,r); ctx.arcTo(0,0,r,0,r);
+  ctx.closePath();
+  const bgGrad = ctx.createLinearGradient(0,0,s,s);
+  bgGrad.addColorStop(0,'#1A0533');
+  bgGrad.addColorStop(0.5,'#2D0A4E');
+  bgGrad.addColorStop(1,'#0A1A40');
+  ctx.fillStyle = bgGrad;
+  ctx.fill();
+
+  // 星星背景
+  ctx.save();
+  ctx.clip();
+  for(let i=0;i<40;i++){
+    const sx=Math.random()*s, sy=Math.random()*s;
+    const sr=Math.random()*2+0.5;
+    ctx.beginPath();
+    ctx.arc(sx,sy,sr,0,Math.PI*2);
+    ctx.fillStyle=`rgba(255,255,255,${Math.random()*0.6+0.2})`;
+    ctx.fill();
+  }
+  ctx.restore();
+
+  document.fonts.ready.then(function(){
+    // 水晶球本體
+    const cx=s/2, cy=s/2-20;
+    const ballR=140;
+
+    // 球體漸層
+    const ballGrad = ctx.createRadialGradient(cx-40,cy-40,10,cx,cy,ballR);
+    ballGrad.addColorStop(0,'rgba(220,180,255,0.95)');
+    ballGrad.addColorStop(0.3,'rgba(168,85,247,0.85)');
+    ballGrad.addColorStop(0.7,'rgba(99,32,180,0.9)');
+    ballGrad.addColorStop(1,'rgba(30,0,80,0.95)');
+    ctx.beginPath();
+    ctx.arc(cx,cy,ballR,0,Math.PI*2);
+    ctx.fillStyle=ballGrad;
+    ctx.fill();
+
+    // 球體光澤
+    const shineGrad = ctx.createRadialGradient(cx-50,cy-50,5,cx-30,cy-30,80);
+    shineGrad.addColorStop(0,'rgba(255,255,255,0.7)');
+    shineGrad.addColorStop(0.5,'rgba(255,255,255,0.15)');
+    shineGrad.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.beginPath();
+    ctx.arc(cx,cy,ballR,0,Math.PI*2);
+    ctx.fillStyle=shineGrad;
+    ctx.fill();
+
+    // 球體邊框光暈
+    ctx.beginPath();
+    ctx.arc(cx,cy,ballR,0,Math.PI*2);
+    ctx.strokeStyle='rgba(220,180,255,0.5)';
+    ctx.lineWidth=3;
+    ctx.stroke();
+
+    // 球內星光
+    const innerStar = ctx.createRadialGradient(cx,cy,0,cx,cy,ballR*0.7);
+    innerStar.addColorStop(0,'rgba(255,220,255,0.3)');
+    innerStar.addColorStop(0.5,'rgba(180,100,255,0.15)');
+    innerStar.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.beginPath();
+    ctx.arc(cx,cy,ballR,0,Math.PI*2);
+    ctx.fillStyle=innerStar;
+    ctx.fill();
+
+    // 球內文字 🔮
+    ctx.font='bold 100px serif';
+    ctx.fillStyle='rgba(255,255,255,0.9)';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText('🔮',cx,cy);
+
+    // 底座
+    const baseY=cy+ballR+2;
+    const baseW=ballR*0.8;
+    const baseH=30;
+    const baseGrad=ctx.createLinearGradient(cx-baseW,baseY,cx+baseW,baseY+baseH);
+    baseGrad.addColorStop(0,'#C084FC');
+    baseGrad.addColorStop(0.5,'#E9D5FF');
+    baseGrad.addColorStop(1,'#C084FC');
+    ctx.beginPath();
+    ctx.ellipse(cx,baseY,baseW,12,0,0,Math.PI*2);
+    ctx.fillStyle=baseGrad;
+    ctx.fill();
+
+    // 序號工坊文字
+    ctx.font='bold 38px "Noto Sans TC",sans-serif';
+    ctx.fillStyle='rgba(233,213,255,0.9)';
+    ctx.textAlign='center';
+    ctx.textBaseline='alphabetic';
+    ctx.fillText('序號工坊',cx,baseY+baseH+44);
+
+    // 底部小字
+    ctx.font='22px "Noto Sans TC",sans-serif';
+    ctx.fillStyle='rgba(180,130,255,0.7)';
+    ctx.fillText('WEILIANG',cx,baseY+baseH+76);
+
+    // 套用到 apple-touch-icon
+    const url=cv.toDataURL('image/png');
+    let lnk=document.querySelector('link[rel="apple-touch-icon"]');
+    if(!lnk){lnk=document.createElement('link');lnk.rel='apple-touch-icon';document.head.appendChild(lnk);}
+    lnk.href=url;
+    // favicon
+    let fav=document.querySelector('link[rel="icon"]');
+    if(!fav){fav=document.createElement('link');fav.rel='icon';document.head.appendChild(fav);}
+    fav.href=url;
+  });
+})();
+</script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --pink:#FF6B9D;--purple:#A855F7;--blue:#3B82F6;--green:#10B981;--orange:#F59E0B;--red:#EF4444;
+  --bg:linear-gradient(135deg,#FFF0F8 0%,#F0F0FF 50%,#F0FFF8 100%);
+  --card:#FFFFFF;--border:#F0E8FF;--text:#2D1B69;--text2:#6B5B95;--text3:#A89BC2;
+}
+body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);min-height:100vh;padding:20px 16px 80px;max-width:480px;margin:0 auto;color:var(--text)}
+
+/* Header */
+.header{text-align:center;padding:32px 0 24px;position:relative}
+.header-emoji{font-size:56px;margin-bottom:8px;display:block;animation:float 3s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.header-title{font-size:22px;font-weight:700;background:linear-gradient(135deg,var(--pink),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px}
+.header-sub{font-size:12px;color:var(--text3)}
+.secret-badge{display:inline-block;background:linear-gradient(135deg,#FFE4F0,#F0E4FF);border:1px solid #F0C0E0;border-radius:20px;padding:4px 14px;font-size:11px;color:var(--pink);font-weight:600;margin-top:8px}
+
+/* Cards */
+.card{background:var(--card);border-radius:20px;padding:20px;margin-bottom:16px;box-shadow:0 4px 20px rgba(168,85,247,.08);border:1px solid var(--border)}
+.card-header{display:flex;align-items:center;gap:8px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px dashed #F0E8FF}
+.card-icon{font-size:22px}
+.card-title{font-size:14px;font-weight:700;color:var(--text)}
+
+/* Form */
+.field-label{font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px;margin-top:14px;display:block;letter-spacing:.5px}
+.field-label:first-of-type{margin-top:0}
+select,input[type=text]{
+  width:100%;padding:11px 14px;border:2px solid #F0E8FF;border-radius:12px;
+  background:#FDFAFF;font-size:13px;font-family:inherit;color:var(--text);outline:none;
+  transition:border-color .2s
+}
+select:focus,input:focus{border-color:var(--purple)}
+
+/* Type selector */
+.type-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:4px}
+.type-btn{padding:10px 6px;border-radius:12px;border:2px solid #F0E8FF;background:#FDFAFF;cursor:pointer;text-align:center;transition:all .15s;font-family:inherit}
+.type-btn .t-icon{font-size:20px;display:block;margin-bottom:3px}
+.type-btn .t-label{font-size:10px;font-weight:600;color:var(--text2)}
+.type-btn.active{border-color:var(--purple);background:linear-gradient(135deg,#F5F0FF,#FFF0F8)}
+.type-btn.active .t-label{color:var(--purple)}
+
+/* Generate button */
+.gen-btn{width:100%;padding:14px;border-radius:16px;border:none;background:linear-gradient(135deg,var(--pink),var(--purple));color:#FFF;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;margin-top:14px;transition:transform .1s,opacity .15s;letter-spacing:1px}
+.gen-btn:hover{opacity:.9}
+.gen-btn:active{transform:scale(.97)}
+
+/* Serial display */
+.serial-reveal{display:none;margin-top:16px;animation:popIn .3s ease}
+@keyframes popIn{0%{transform:scale(.9);opacity:0}100%{transform:scale(1);opacity:1}}
+.serial-box{background:linear-gradient(135deg,#FFF0F8,#F5F0FF);border:2px dashed var(--purple);border-radius:16px;padding:18px;text-align:center;margin-bottom:12px;position:relative}
+.serial-box::before{content:'✨';position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:#FFF;padding:0 6px;font-size:16px}
+.serial-text{font-size:20px;font-weight:700;color:var(--purple);letter-spacing:4px;margin-bottom:6px}
+.serial-type-tag{display:inline-block;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:600;background:#F0E4FF;color:var(--purple)}
+
+/* Action buttons */
+.action-row{display:flex;gap:8px;flex-wrap:wrap}
+.act-btn{flex:1;min-width:120px;padding:10px 8px;border-radius:12px;border:none;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;transition:all .15s;text-align:center}
+.act-btn:active{transform:scale(.96)}
+.act-copy{background:linear-gradient(135deg,#FF6B9D,#FF8C69);color:#FFF}
+.act-sheet{background:linear-gradient(135deg,#10B981,#3B82F6);color:#FFF}
+.act-save{background:linear-gradient(135deg,#A855F7,#6366F1);color:#FFF}
+
+/* Steps hint */
+.steps-hint{background:linear-gradient(135deg,#F0FFF8,#F0F0FF);border-radius:12px;padding:12px 14px;margin-top:10px;font-size:11px;color:var(--text2);line-height:2}
+.steps-hint strong{color:var(--purple)}
+
+/* Records */
+.record-list{max-height:260px;overflow-y:auto;border-radius:12px;border:2px solid #F0E8FF}
+.record-item{padding:10px 14px;border-bottom:1px dashed #F0E8FF;display:flex;align-items:center;gap:10px;background:#FFF;transition:background .15s}
+.record-item:last-child{border-bottom:none}
+.record-item:hover{background:#FDFAFF}
+.r-serial{font-size:13px;font-weight:700;color:var(--purple);letter-spacing:1px;flex:1}
+.r-name{font-size:11px;color:var(--text3);margin-top:1px}
+.r-tag{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;white-space:nowrap}
+.r-tag-normal{background:#F0E4FF;color:var(--purple)}
+.r-tag-agent{background:#FFF3CD;color:#D97706}
+.r-tag-student{background:#D1FAE5;color:#059669}
+.r-tag-manual{background:#E0F2FE;color:#0284C7}
+.r-date{font-size:10px;color:var(--text3)}
+.empty-state{padding:30px;text-align:center;color:var(--text3);font-size:13px}
+.empty-state .e-icon{font-size:36px;display:block;margin-bottom:8px}
+
+/* Small buttons */
+.sm-btn{padding:7px 14px;border-radius:10px;border:2px solid #F0E8FF;background:#FDFAFF;font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;color:var(--text2);transition:all .15s}
+.sm-btn:hover{border-color:var(--purple);color:var(--purple)}
+.sm-btn-danger{border-color:#FFE4E4;color:var(--red)}
+.sm-btn-danger:hover{background:#FFF0F0;border-color:var(--red)}
+.sm-btn-green{background:linear-gradient(135deg,#10B981,#3B82F6);color:#FFF;border:none}
+
+/* Stats */
+.stats-row{display:flex;gap:10px;margin-bottom:16px}
+.stat-box{flex:1;background:linear-gradient(135deg,#FFF0F8,#F5F0FF);border-radius:14px;padding:14px;text-align:center;border:1px solid #F0E4FF}
+.stat-num{font-size:26px;font-weight:700;background:linear-gradient(135deg,var(--pink),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.stat-label{font-size:10px;color:var(--text3);margin-top:2px}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(10px);background:linear-gradient(135deg,var(--purple),var(--pink));color:#FFF;padding:10px 22px;border-radius:20px;font-size:13px;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:9999;white-space:nowrap;box-shadow:0 4px 20px rgba(168,85,247,.3)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Manual section */
+.manual-toggle{width:100%;padding:10px;border-radius:12px;border:2px dashed #F0E8FF;background:transparent;font-size:12px;color:var(--text3);cursor:pointer;font-family:inherit;transition:all .15s}
+.manual-toggle:hover{border-color:var(--purple);color:var(--purple)}
+.manual-area{display:none;margin-top:12px;padding-top:12px;border-top:2px dashed #F0E8FF}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span class="header-emoji">🎰</span>
+  <div class="header-title">序號工坊</div>
+  <div class="header-sub">威良八字・序號管理後台</div>
+  <div class="secret-badge">🔒 私人後台，請勿分享</div>
+</div>
+
+<!-- 統計 -->
+<div class="stats-row">
+  <div class="stat-box">
+    <div class="stat-num" id="statTotal">0</div>
+    <div class="stat-label">📦 已發序號</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-num" id="statToday">0</div>
+    <div class="stat-label">✨ 今日新增</div>
+  </div>
+</div>
+
+<!-- 產生序號 -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-icon">🎲</span>
+    <span class="card-title">產生新序號</span>
+  </div>
+
+  <span class="field-label">客戶類型</span>
+  <div class="type-grid">
+    <button class="type-btn active" onclick="selectType('normal',this)">
+      <span class="t-icon">👤</span>
+      <span class="t-label">一般用戶</span>
+    </button>
+    <button class="type-btn" onclick="selectType('agent',this)">
+      <span class="t-icon">🤝</span>
+      <span class="t-label">代理商</span>
+    </button>
+    <button class="type-btn" onclick="selectType('student',this)">
+      <span class="t-icon">🎓</span>
+      <span class="t-label">學生優惠</span>
+    </button>
+  </div>
+
+  <span class="field-label">客戶名稱 / IG</span>
+  <input type="text" id="clientNote" placeholder="例：陳小明 / @ighandle">
+
+  <button class="gen-btn" onclick="generateSerial()">🎰 產生序號！</button>
+
+  <div class="serial-reveal" id="genArea">
+    <div class="serial-box">
+      <div class="serial-text" id="serialDisplay">—</div>
+      <span class="serial-type-tag" id="serialTypeTag">一般用戶</span>
+    </div>
+    <div class="action-row">
+      <button class="act-btn act-copy" onclick="copySerial()">📋 複製序號</button>
+      <button class="act-btn act-sheet" onclick="copySheetLatest()">📊 複製到Sheet</button>
+      <button class="act-btn act-save" onclick="saveAndSync()" id="saveBtn">💾 儲存紀錄</button>
+    </div>
+    <div class="steps-hint">
+      📋 <strong>複製序號</strong> → 傳給客戶<br>
+      📊 <strong>複製到Sheet</strong> → 貼入 Google Sheet A欄<br>
+      💾 <strong>儲存紀錄</strong> → 本機備查
+    </div>
+  </div>
+</div>
+
+<!-- 序號紀錄 -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-icon">📋</span>
+    <span class="card-title">已發出的序號</span>
+  </div>
+  <div class="record-list" id="serialList">
+    <div class="empty-state">
+      <span class="e-icon">🌸</span>
+      還沒有序號紀錄哦～<br>快去產生第一組吧！
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+    <button class="sm-btn sm-btn-green" onclick="exportAll()">📥 匯出全部</button>
+    <button class="sm-btn sm-btn-danger" onclick="clearAll()">🗑️ 清除紀錄</button>
+  </div>
+</div>
+
+<!-- 手動新增 -->
+<div class="card">
+  <button class="manual-toggle" onclick="toggleManual()">➕ 手動新增序號（進階）</button>
+  <div class="manual-area" id="manualArea">
+    <span class="field-label">序號</span>
+    <input type="text" id="manualSerial" placeholder="WL-XXXX-XXXX" oninput="this.value=this.value.toUpperCase()" maxlength="16">
+    <span class="field-label">備註</span>
+    <input type="text" id="manualNote" placeholder="說明">
+    <button class="gen-btn" onclick="addManual()" style="margin-top:12px;background:linear-gradient(135deg,#3B82F6,#10B981)">✅ 新增</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let records = JSON.parse(localStorage.getItem('bazi_serial_records') || '[]');
+let currentSerial = '';
+let currentType = 'normal';
+
+const TYPE_CONFIG = {
+  normal: { label:'一般用戶', tag:'r-tag-normal', icon:'👤', prefix:'WL' },
+  agent:  { label:'代理商',   tag:'r-tag-agent',  icon:'🤝', prefix:'WLA' },
+  student:{ label:'學生優惠', tag:'r-tag-student', icon:'🎓', prefix:'WLS' },
+  manual: { label:'手動新增', tag:'r-tag-manual',  icon:'✏️', prefix:'WL' },
+};
+
+const WL_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+function selectType(type, btn) {
+  currentType = type;
+  document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function makeSerial(type) {
+  const prefix = TYPE_CONFIG[type]?.prefix || 'WL';
+  const p1 = Array.from({length:4},()=>WL_CHARS[Math.floor(Math.random()*WL_CHARS.length)]).join('');
+  const p2 = Array.from({length:4},()=>WL_CHARS[Math.floor(Math.random()*WL_CHARS.length)]).join('');
+  return `${prefix}-${p1}-${p2}`;
+}
+
+function generateSerial() {
+  const note = document.getElementById('clientNote').value.trim();
+  currentSerial = makeSerial(currentType);
+  const cfg = TYPE_CONFIG[currentType];
+
+  document.getElementById('serialDisplay').textContent = currentSerial;
+  document.getElementById('serialTypeTag').textContent = cfg.icon + ' ' + cfg.label;
+
+  const area = document.getElementById('genArea');
+  area.style.display = 'block';
+
+  const saveBtn = document.getElementById('saveBtn');
+  saveBtn.textContent = '💾 儲存紀錄';
+  saveBtn.disabled = false;
+}
+
+function copySerial() {
+  if(!currentSerial) return;
+  try { navigator.clipboard.writeText(currentSerial); } catch(e){}
+  showToast('📋 序號已複製！');
+}
+
+function copySheetLatest() {
+  if(!currentSerial) return;
+  const note = document.getElementById('clientNote').value.trim() || '—';
+  const cfg = TYPE_CONFIG[currentType];
+  const row = `${currentSerial}\t${note}\t${cfg.label}\t${new Date().toLocaleDateString('zh-TW')}\t`;
+  try { navigator.clipboard.writeText(row); } catch(e){}
+  showToast('📊 已複製！直接貼入 Google Sheet');
+}
+
+function saveAndSync() {
+  if(!currentSerial) return;
+  const note = document.getElementById('clientNote').value.trim();
+  const cfg = TYPE_CONFIG[currentType];
+  records.push({
+    serial: currentSerial,
+    name: note || '—',
+    type: currentType,
+    typeLabel: cfg.label,
+    date: new Date().toLocaleDateString('zh-TW'),
+  });
+  localStorage.setItem('bazi_serial_records', JSON.stringify(records));
+  renderList();
+  updateStats();
+  const saveBtn = document.getElementById('saveBtn');
+  saveBtn.textContent = '✅ 已儲存！';
+  saveBtn.disabled = true;
+  showToast('💾 紀錄已儲存！');
+  currentSerial = '';
+}
+
+function addManual() {
+  const s = document.getElementById('manualSerial').value.trim().toUpperCase();
+  const note = document.getElementById('manualNote').value.trim();
+  if(!s) return showToast('⚠️ 請輸入序號');
+  records.push({
+    serial: s, name: note||'—', type:'manual',
+    typeLabel:'手動新增', date: new Date().toLocaleDateString('zh-TW'),
+  });
+  localStorage.setItem('bazi_serial_records', JSON.stringify(records));
+  renderList();
+  updateStats();
+  document.getElementById('manualSerial').value = '';
+  document.getElementById('manualNote').value = '';
+  showToast('✅ 已新增！');
+}
+
+function clearAll() {
+  if(!confirm('確定清除所有序號紀錄嗎？')) return;
+  records = [];
+  localStorage.removeItem('bazi_serial_records');
+  renderList();
+  updateStats();
+  showToast('🗑️ 已清除');
+}
+
+function exportAll() {
+  if(!records.length) return showToast('⚠️ 還沒有紀錄哦');
+  const header = '序號\t客戶名稱\t類型\t日期';
+  const rows = records.map(r=>`${r.serial}\t${r.name}\t${r.typeLabel}\t${r.date}`);
+  const txt = [header,...rows].join('\n');
+  const blob = new Blob([txt],{type:'text/plain;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `序號紀錄_${new Date().toLocaleDateString('zh-TW').replace(/\//g,'-')}.txt`;
+  a.click();
+  showToast('📥 已匯出！');
+}
+
+function toggleManual() {
+  const area = document.getElementById('manualArea');
+  area.style.display = area.style.display === 'block' ? 'none' : 'block';
+}
+
+function renderList() {
+  const el = document.getElementById('serialList');
+  if(!records.length) {
+    el.innerHTML = `<div class="empty-state"><span class="e-icon">🌸</span>還沒有序號紀錄哦～<br>快去產生第一組吧！</div>`;
+    return;
+  }
+  el.innerHTML = [...records].reverse().map(r => {
+    const cfg = TYPE_CONFIG[r.type] || TYPE_CONFIG.normal;
+    return `<div class="record-item">
+      <div style="flex:1;min-width:0">
+        <div class="r-serial">${r.serial}</div>
+        <div class="r-name">${r.name}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <span class="r-tag ${cfg.tag}">${cfg.icon} ${r.typeLabel}</span>
+        <div class="r-date">${r.date}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function updateStats() {
+  document.getElementById('statTotal').textContent = records.length;
+  const today = new Date().toLocaleDateString('zh-TW');
+  const todayCount = records.filter(r => r.date === today).length;
+  document.getElementById('statToday').textContent = todayCount;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2000);
+}
+
+renderList();
+updateStats();
+</script>
+</body>
+</html>
