@@ -246,7 +246,7 @@ select:focus,input:focus{border-color:var(--purple)}
 <div class="header">
   <span class="header-emoji">🎰</span>
   <div class="header-title">序號工坊</div>
-  <div class="header-sub">威良八字・序號管理後台</div>
+  <div class="header-sub">光耀命理系統管理後台</div>
   <div class="secret-badge">🔒 私人後台，請勿分享</div>
 </div>
 
@@ -261,6 +261,16 @@ select:focus,input:focus{border-color:var(--purple)}
     <div class="stat-label">✨ 今日新增</div>
   </div>
 </div>
+<div class="stats-row">
+  <div class="stat-box" style="background:linear-gradient(135deg,#FFF8E8,#FFF0E0)">
+    <div class="stat-num" id="statRevenue" style="background:linear-gradient(135deg,#F59E0B,#EF4444);-webkit-background-clip:text;-webkit-text-fill-color:transparent">NT$0</div>
+    <div class="stat-label">💰 公司實收</div>
+  </div>
+  <div class="stat-box" style="background:linear-gradient(135deg,#FFF0F8,#F5F0FF)">
+    <div class="stat-num" id="statReferral" style="background:linear-gradient(135deg,var(--pink),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent">NT$0</div>
+    <div class="stat-label">🎁 已發推薦獎金</div>
+  </div>
+</div>
 
 <!-- 產生序號 -->
 <div class="card">
@@ -269,24 +279,20 @@ select:focus,input:focus{border-color:var(--purple)}
     <span class="card-title">產生新序號</span>
   </div>
 
-  <span class="field-label">客戶類型</span>
-  <div class="type-grid">
-    <button class="type-btn active" onclick="selectType('normal',this)">
-      <span class="t-icon">👤</span>
-      <span class="t-label">一般用戶</span>
-    </button>
-    <button class="type-btn" onclick="selectType('agent',this)">
-      <span class="t-icon">🤝</span>
-      <span class="t-label">代理商</span>
-    </button>
-    <button class="type-btn" onclick="selectType('student',this)">
-      <span class="t-icon">🎓</span>
-      <span class="t-label">學生優惠</span>
-    </button>
+  <span class="field-label">推薦老師 / 夥伴（正式代理，選填）</span>
+  <select id="referrerSelect" onchange="handleReferrerChange()"></select>
+  <div id="newReferrerArea" style="display:none;margin-top:6px;gap:6px;">
+    <input type="text" id="newReferrerInput" placeholder="輸入新名字" style="flex:1;">
+    <button class="sm-btn" onclick="addNewReferrer()" style="margin-left:6px;">新增</button>
   </div>
+
+  <div id="typeAutoBadge" style="margin:8px 0 4px;padding:8px 10px;border-radius:10px;background:#F5F0FF;font-size:11px;color:var(--text2);"></div>
 
   <span class="field-label">客戶名稱 / IG</span>
   <input type="text" id="clientNote" placeholder="例：陳小明 / @ighandle">
+
+  <span class="field-label">備註 / 小代理推薦人姓名（沒有正式代理時，分享獎金會付給這裡填的人，選填）</span>
+  <input type="text" id="remarkNote" placeholder="例：陳小明說是OO介紹的（純記錄，不影響分潤）" oninput="if(currentSerial){renderBreakdownBox(TYPE_CONFIG[currentType]);}">
 
   <button class="gen-btn" onclick="generateSerial()">🎰 產生序號！</button>
 
@@ -295,6 +301,7 @@ select:focus,input:focus{border-color:var(--purple)}
       <div class="serial-text" id="serialDisplay">—</div>
       <span class="serial-type-tag" id="serialTypeTag">一般用戶</span>
     </div>
+    <div class="breakdown-box" id="breakdownBox" style="display:none;background:#FFF;border:1.5px solid #F0E8FF;border-radius:12px;padding:10px 12px;margin:4px 0 8px;"></div>
     <div class="action-row">
       <button class="act-btn act-copy" onclick="copySerial()">📋 複製序號</button>
       <button class="act-btn act-sheet" onclick="copySheetLatest()">📊 複製到Sheet</button>
@@ -302,8 +309,8 @@ select:focus,input:focus{border-color:var(--purple)}
     </div>
     <div class="steps-hint">
       📋 <strong>複製序號</strong> → 傳給客戶<br>
-      📊 <strong>複製到Sheet</strong> → 貼入 Google Sheet A欄<br>
-      💾 <strong>儲存紀錄</strong> → 本機備查
+      💾 <strong>儲存紀錄</strong> → 自動寫入 Google 試算表＋本機備查<br>
+      📊 <strong>複製到Sheet</strong> → 備用功能，同步失敗時手動貼上
     </div>
   </div>
 </div>
@@ -345,19 +352,127 @@ let records = JSON.parse(localStorage.getItem('bazi_serial_records') || '[]');
 let currentSerial = '';
 let currentType = 'normal';
 
+// 與序號驗證共用同一個 Apps Script 網址，新增序號時會直接寫入試算表
+const UNLOCK_API_URL = 'https://script.google.com/macros/s/AKfycbxNFNmSUvH7xXv2hWEITs31gOriVTCqigjlEmB5MPsEH_GyImJwUL45v8DyAc5Gvr9Ueg/exec';
+
+// ── 推薦老師 / 夥伴 下拉選單 ──
+const DEFAULT_REFERRERS = ['張威良', '陳湘雲', '王筠'];
+let referrerList = JSON.parse(localStorage.getItem('bazi_referrer_list') || 'null') || DEFAULT_REFERRERS.slice();
+
+function renderReferrerOptions(selectedValue) {
+  const sel = document.getElementById('referrerSelect');
+  sel.innerHTML = '';
+
+  const optNone = document.createElement('option');
+  optNone.value = '';
+  optNone.textContent = '— 無（一般用戶直接購買）—';
+  sel.appendChild(optNone);
+
+  referrerList.forEach(function(name){
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  });
+
+  const optNew = document.createElement('option');
+  optNew.value = '__new__';
+  optNew.textContent = '➕ 新增其他人...';
+  sel.appendChild(optNew);
+
+  if (selectedValue) sel.value = selectedValue;
+}
+
+function handleReferrerChange() {
+  const sel = document.getElementById('referrerSelect');
+  const area = document.getElementById('newReferrerArea');
+  if (sel.value === '__new__') {
+    area.style.display = 'flex';
+    document.getElementById('newReferrerInput').focus();
+    return; // 還在輸入新名字，先不更新類型判斷
+  } else {
+    area.style.display = 'none';
+  }
+  updateAutoType();
+}
+
+function addNewReferrer() {
+  const input = document.getElementById('newReferrerInput');
+  const name = input.value.trim();
+  if (!name) { showToast('⚠️ 請輸入名字'); return; }
+  if (!referrerList.includes(name)) {
+    referrerList.push(name);
+    localStorage.setItem('bazi_referrer_list', JSON.stringify(referrerList));
+  }
+  renderReferrerOptions(name);
+  input.value = '';
+  document.getElementById('newReferrerArea').style.display = 'none';
+  showToast('✅ 已新增「' + name + '」，下次可直接選');
+  updateAutoType();
+}
+
+function getSelectedReferrer() {
+  const v = document.getElementById('referrerSelect').value;
+  return (v === '__new__') ? '' : v;
+}
+
+function syncToSheet(serial, name, typeLabel, referrer, breakdown, remark, attempt) {
+  attempt = attempt || 1;
+  if (!UNLOCK_API_URL) return Promise.resolve(false);
+  const amt = function(role){
+    const item = (breakdown||[]).find(function(b){ return b.role === role; });
+    return item ? item.amount : 0;
+  };
+  const url = UNLOCK_API_URL
+    + '?action=add'
+    + '&serial=' + encodeURIComponent(serial)
+    + '&name=' + encodeURIComponent(name || '')
+    + '&type=' + encodeURIComponent(typeLabel || '')
+    + '&referrer=' + encodeURIComponent(referrer || '')
+    + '&note=' + encodeURIComponent(remark || '')
+    + '&design=' + amt('design')
+    + '&bonus=' + amt('referral')
+    + '&fund=' + amt('fund');
+  return fetch(url)
+    .then(function(res){ return res.json(); })
+    .then(function(data){ return !!data.success; })
+    .catch(function(){
+      if (attempt < 3) {
+        return new Promise(function(resolve){
+          setTimeout(function(){
+            resolve(syncToSheet(serial, name, typeLabel, referrer, breakdown, remark, attempt + 1));
+          }, 1500 * attempt); // 失敗後等 1.5 秒、再失敗等 3 秒，最多重試到第 3 次
+        });
+      }
+      return false;
+    });
+}
+
 const TYPE_CONFIG = {
-  normal: { label:'一般用戶', tag:'r-tag-normal', icon:'👤', prefix:'WL' },
-  agent:  { label:'代理商',   tag:'r-tag-agent',  icon:'🤝', prefix:'WLA' },
-  student:{ label:'學生優惠', tag:'r-tag-student', icon:'🎓', prefix:'WLS' },
-  manual: { label:'手動新增', tag:'r-tag-manual',  icon:'✏️', prefix:'WL' },
+  normal: { label:'一般用戶', tag:'r-tag-normal', icon:'👤', prefix:'WL',  price:399,
+    breakdown:[ {label:'設計維護費', amount:150, role:'design'}, {label:'分享獎金', amount:49, role:'referral'}, {label:'公積金', amount:200, role:'fund'} ] },
+  agent:  { label:'代理推薦', tag:'r-tag-student',icon:'🤝', prefix:'WLA', price:399,
+    breakdown:[ {label:'設計維護費', amount:150, role:'design'}, {label:'分享獎金', amount:149, role:'referral'}, {label:'公積金', amount:100, role:'fund'} ] },
+  manual: { label:'手動新增', tag:'r-tag-manual', icon:'✏️', prefix:'WL',  price:0, breakdown:[] },
 };
 
 const WL_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-function selectType(type, btn) {
-  currentType = type;
-  document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+// 客戶類型現在不用手動選，依推薦老師選單自動判斷：
+// 選了正式代理（張威良/陳湘雲/王筠）就是「代理推薦」；選「無」就是「一般用戶」
+function updateAutoType() {
+  const referrer = getSelectedReferrer();
+  currentType = referrer ? 'agent' : 'normal';
+  const cfg = TYPE_CONFIG[currentType];
+  const badge = document.getElementById('typeAutoBadge');
+  if (referrer) {
+    badge.innerHTML = '🤝 系統判定：<strong style="color:var(--purple);">代理推薦</strong>（因為選了「' + referrer + '」）';
+  } else {
+    badge.innerHTML = '👤 系統判定：<strong style="color:var(--purple);">一般用戶</strong>（沒有選正式代理）';
+  }
+  if (currentSerial) {
+    renderBreakdownBox(cfg);
+  }
 }
 
 function makeSerial(type) {
@@ -373,7 +488,9 @@ function generateSerial() {
   const cfg = TYPE_CONFIG[currentType];
 
   document.getElementById('serialDisplay').textContent = currentSerial;
-  document.getElementById('serialTypeTag').textContent = cfg.icon + ' ' + cfg.label;
+  document.getElementById('serialTypeTag').textContent = cfg.icon + ' ' + cfg.label + ' · NT$' + cfg.price;
+
+  renderBreakdownBox(cfg);
 
   const area = document.getElementById('genArea');
   area.style.display = 'block';
@@ -381,6 +498,34 @@ function generateSerial() {
   const saveBtn = document.getElementById('saveBtn');
   saveBtn.textContent = '💾 儲存紀錄';
   saveBtn.disabled = false;
+}
+
+const ROLE_ICON = { design:'💼', referral:'🎁', fund:'🏦' };
+
+function renderBreakdownBox(cfg) {
+  const box = document.getElementById('breakdownBox');
+  if (!cfg.breakdown || !cfg.breakdown.length) {
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+  const formalReferrer = getSelectedReferrer();
+  const remarkEl = document.getElementById('remarkNote');
+  const casualReferrer = remarkEl ? remarkEl.value.trim() : '';
+  // 分享獎金要付給誰：有正式代理就付正式代理；沒有的話，看備註欄位有沒有記錄小代理的名字
+  const payee = formalReferrer || casualReferrer;
+  const rows = cfg.breakdown.map(function(b){
+    let who = '';
+    if (b.role === 'design') who = '（給自己）';
+    else if (b.role === 'fund') who = '（公司留存）';
+    else if (b.role === 'referral') who = payee ? '（付給：' + payee + '）' : '（目前無人領取，併入公司）';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12px;">'
+      + '<span style="color:var(--text2);">' + (ROLE_ICON[b.role]||'') + ' ' + b.label + '<span style="color:var(--text3);font-size:10px;margin-left:4px;">' + who + '</span></span>'
+      + '<span style="font-weight:700;color:var(--text);">NT$' + b.amount + '</span>'
+      + '</div>';
+  }).join('<div style="border-top:1px dashed #F0E8FF;margin:2px 0;"></div>');
+  box.innerHTML = rows;
+  box.style.display = 'block';
 }
 
 function copySerial() {
@@ -392,31 +537,54 @@ function copySerial() {
 function copySheetLatest() {
   if(!currentSerial) return;
   const note = document.getElementById('clientNote').value.trim() || '—';
+  const remark = document.getElementById('remarkNote').value.trim();
+  const referrer = getSelectedReferrer() || '—';
   const cfg = TYPE_CONFIG[currentType];
-  const row = `${currentSerial}\t${note}\t${cfg.label}\t${new Date().toLocaleDateString('zh-TW')}\t`;
+  const amt = function(role){
+    const item = (cfg.breakdown||[]).find(function(b){ return b.role === role; });
+    return item ? item.amount : '';
+  };
+  const row = `${currentSerial}\t${note}\t${cfg.label}\t${new Date().toLocaleDateString('zh-TW')}\t${remark}\t${referrer}\t${amt('design')}\t${amt('referral')}\t${amt('fund')}`;
   try { navigator.clipboard.writeText(row); } catch(e){}
-  showToast('📊 已複製！直接貼入 Google Sheet');
+  showToast('📊 已複製！可手動貼入 Google Sheet（備用）');
 }
 
 function saveAndSync() {
   if(!currentSerial) return;
   const note = document.getElementById('clientNote').value.trim();
+  const remark = document.getElementById('remarkNote').value.trim();
+  const referrer = getSelectedReferrer();
   const cfg = TYPE_CONFIG[currentType];
   records.push({
     serial: currentSerial,
     name: note || '—',
     type: currentType,
     typeLabel: cfg.label,
+    price: cfg.price,
     date: new Date().toLocaleDateString('zh-TW'),
+    referrer: referrer || '—',
+    remark: remark || '—',
   });
   localStorage.setItem('bazi_serial_records', JSON.stringify(records));
   renderList();
   updateStats();
+
   const saveBtn = document.getElementById('saveBtn');
-  saveBtn.textContent = '✅ 已儲存！';
+  saveBtn.textContent = '⏳ 同步中...';
   saveBtn.disabled = true;
-  showToast('💾 紀錄已儲存！');
+
+  const serialToSync = currentSerial;
   currentSerial = '';
+
+  syncToSheet(serialToSync, note, cfg.label, referrer, cfg.breakdown, remark).then(function(ok){
+    if (ok) {
+      saveBtn.textContent = '✅ 已同步試算表！';
+      showToast('💾 已自動寫入 Google 試算表！');
+    } else {
+      saveBtn.textContent = '⚠️ 同步失敗，請用備用按鈕';
+      showToast('⚠️ 試算表同步失敗，請按「複製到Sheet」手動補貼');
+    }
+  });
 }
 
 function addManual() {
@@ -432,7 +600,10 @@ function addManual() {
   updateStats();
   document.getElementById('manualSerial').value = '';
   document.getElementById('manualNote').value = '';
-  showToast('✅ 已新增！');
+  showToast('✅ 已新增，同步試算表中...');
+  syncToSheet(s, note, '手動新增', '', TYPE_CONFIG.manual.breakdown, '').then(function(ok){
+    showToast(ok ? '💾 已同步試算表！' : '⚠️ 試算表同步失敗，請手動補上');
+  });
 }
 
 function clearAll() {
@@ -446,8 +617,8 @@ function clearAll() {
 
 function exportAll() {
   if(!records.length) return showToast('⚠️ 還沒有紀錄哦');
-  const header = '序號\t客戶名稱\t類型\t日期';
-  const rows = records.map(r=>`${r.serial}\t${r.name}\t${r.typeLabel}\t${r.date}`);
+  const header = '序號\t客戶名稱\t類型\t金額\t日期';
+  const rows = records.map(r=>`${r.serial}\t${r.name}\t${r.typeLabel}\t${r.price||0}\t${r.date}`);
   const txt = [header,...rows].join('\n');
   const blob = new Blob([txt],{type:'text/plain;charset=utf-8'});
   const a = document.createElement('a');
@@ -473,7 +644,7 @@ function renderList() {
     return `<div class="record-item">
       <div style="flex:1;min-width:0">
         <div class="r-serial">${r.serial}</div>
-        <div class="r-name">${r.name}</div>
+        <div class="r-name">${r.name}${r.price ? ' · NT$'+r.price : ''}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
         <span class="r-tag ${cfg.tag}">${cfg.icon} ${r.typeLabel}</span>
@@ -488,6 +659,17 @@ function updateStats() {
   const today = new Date().toLocaleDateString('zh-TW');
   const todayCount = records.filter(r => r.date === today).length;
   document.getElementById('statToday').textContent = todayCount;
+
+  let companyTake = 0, referralPaid = 0;
+  records.forEach(function(r){
+    const cfg = TYPE_CONFIG[r.type] || TYPE_CONFIG.normal;
+    (cfg.breakdown || []).forEach(function(b){
+      if (b.role === 'referral') referralPaid += b.amount;
+      else companyTake += b.amount; // 設計維護費 + 公積金 都算公司實收
+    });
+  });
+  document.getElementById('statRevenue').textContent = 'NT$' + companyTake.toLocaleString();
+  document.getElementById('statReferral').textContent = 'NT$' + referralPaid.toLocaleString();
 }
 
 function showToast(msg) {
@@ -497,6 +679,8 @@ function showToast(msg) {
   setTimeout(()=>t.classList.remove('show'), 2000);
 }
 
+renderReferrerOptions();
+updateAutoType();
 renderList();
 updateStats();
 </script>
