@@ -197,6 +197,7 @@ select:focus,input:focus{border-color:var(--purple)}
 .act-copy{background:linear-gradient(135deg,#FF6B9D,#FF8C69);color:#FFF}
 .act-sheet{background:linear-gradient(135deg,#10B981,#3B82F6);color:#FFF}
 .act-save{background:linear-gradient(135deg,#A855F7,#6366F1);color:#FFF}
+.act-card{background:linear-gradient(135deg,#6366F1,#06B6D4);color:#FFF}
 
 /* Steps hint */
 .steps-hint{background:linear-gradient(135deg,#F0FFF8,#F0F0FF);border-radius:12px;padding:12px 14px;margin-top:10px;font-size:11px;color:var(--text2);line-height:2}
@@ -306,12 +307,47 @@ select:focus,input:focus{border-color:var(--purple)}
       <button class="act-btn act-copy" onclick="copySerial()">📋 複製序號</button>
       <button class="act-btn act-sheet" onclick="copySheetLatest()">📊 複製到Sheet</button>
       <button class="act-btn act-save" onclick="saveAndSync()" id="saveBtn">💾 儲存紀錄</button>
+      <button class="act-btn act-card" onclick="saveSerialCard()">📷 下載圖片</button>
     </div>
     <div class="steps-hint">
       📋 <strong>複製序號</strong> → 傳給客戶<br>
       💾 <strong>儲存紀錄</strong> → 自動寫入 Google 試算表＋本機備查<br>
-      📊 <strong>複製到Sheet</strong> → 備用功能，同步失敗時手動貼上
+      📊 <strong>複製到Sheet</strong> → 備用功能，同步失敗時手動貼上<br>
+      📷 <strong>下載圖片</strong> → 存成圖片，傳給推薦老師核對分潤更正式
     </div>
+  </div>
+</div>
+
+<!-- 批次生成序號 -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-icon">⚡</span>
+    <span class="card-title">批次生成序號</span>
+  </div>
+
+  <span class="field-label">推薦老師 / 夥伴（正式代理，選填）</span>
+  <select id="batchReferrerSelect"></select>
+
+  <span class="field-label">要產生幾組？（一次最多 100 組）</span>
+  <input type="text" id="batchCount" inputmode="numeric" placeholder="例：20">
+
+  <span class="field-label">備註（選填，整批共用）</span>
+  <input type="text" id="batchNote" placeholder="例：OO老師活動用">
+
+  <button class="gen-btn" id="batchGenBtn" onclick="batchGenerate()" style="background:linear-gradient(135deg,#3B82F6,#A855F7)">⚡ 批次生成</button>
+
+  <div class="steps-hint" style="margin-top:10px;">
+    ⚡ 按下去會<strong>直接寫入 Google 試算表</strong>，不用再一筆一筆「儲存紀錄」<br>
+    🔢 數量上限 100 組，避免手滑誤觸<br>
+    🤝 有選老師 → 代理推薦（分享獎金 NT$149）；沒選 → 一般用戶（NT$49）
+  </div>
+
+  <div class="breakdown-box" id="batchBreakdownBox" style="display:none;background:#FFF;border:1.5px solid #F0E8FF;border-radius:12px;padding:10px 12px;margin:10px 0 0;"></div>
+
+  <div id="batchResultBox" style="display:none;margin-top:12px;background:#FDFAFF;border:2px dashed #F0E8FF;border-radius:12px;padding:12px;max-height:220px;overflow-y:auto;"></div>
+  <div class="action-row" style="margin-top:8px;">
+    <button class="act-btn act-sheet" id="batchCopyBtn" style="display:none;" onclick="copyBatchResult()">📋 複製整批序號</button>
+    <button class="act-btn act-card" id="batchCardBtn" style="display:none;" onclick="saveBatchCard()">📷 下載圖片</button>
   </div>
 </div>
 
@@ -351,6 +387,7 @@ select:focus,input:focus{border-color:var(--purple)}
 let records = JSON.parse(localStorage.getItem('bazi_serial_records') || '[]');
 let currentSerial = '';
 let currentType = 'normal';
+let lastBatchResult = null; // 記住最近一次批次生成的結果，給「存成圖卡」按鈕用
 
 // 與序號驗證共用同一個 Apps Script 網址，新增序號時會直接寫入試算表
 const UNLOCK_API_URL = 'https://script.google.com/macros/s/AKfycbxNFNmSUvH7xXv2hWEITs31gOriVTCqigjlEmB5MPsEH_GyImJwUL45v8DyAc5Gvr9Ueg/exec';
@@ -359,8 +396,11 @@ const UNLOCK_API_URL = 'https://script.google.com/macros/s/AKfycbxNFNmSUvH7xXv2h
 const DEFAULT_REFERRERS = ['張威良', '陳湘雲', '王筠'];
 let referrerList = JSON.parse(localStorage.getItem('bazi_referrer_list') || 'null') || DEFAULT_REFERRERS.slice();
 
-function renderReferrerOptions(selectedValue) {
-  const sel = document.getElementById('referrerSelect');
+function renderReferrerOptions(selectedValue, selectId) {
+  selectId = selectId || 'referrerSelect';
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const includeAddNew = (selectId === 'referrerSelect');
   sel.innerHTML = '';
 
   const optNone = document.createElement('option');
@@ -375,12 +415,20 @@ function renderReferrerOptions(selectedValue) {
     sel.appendChild(opt);
   });
 
-  const optNew = document.createElement('option');
-  optNew.value = '__new__';
-  optNew.textContent = '➕ 新增其他人...';
-  sel.appendChild(optNew);
+  if (includeAddNew) {
+    const optNew = document.createElement('option');
+    optNew.value = '__new__';
+    optNew.textContent = '➕ 新增其他人...';
+    sel.appendChild(optNew);
+  }
 
   if (selectedValue) sel.value = selectedValue;
+}
+
+// 序號工坊裡有兩個推薦人下拉選單（一般產生序號 / 批次生成），名單要保持同步
+function renderAllReferrerSelects(selectedValue) {
+  renderReferrerOptions(selectedValue, 'referrerSelect');
+  renderReferrerOptions(selectedValue, 'batchReferrerSelect');
 }
 
 function handleReferrerChange() {
@@ -404,7 +452,7 @@ function addNewReferrer() {
     referrerList.push(name);
     localStorage.setItem('bazi_referrer_list', JSON.stringify(referrerList));
   }
-  renderReferrerOptions(name);
+  renderAllReferrerSelects(name);
   input.value = '';
   document.getElementById('newReferrerArea').style.display = 'none';
   showToast('✅ 已新增「' + name + '」，下次可直接選');
@@ -450,9 +498,9 @@ function syncToSheet(serial, name, typeLabel, referrer, breakdown, remark, attem
 
 const TYPE_CONFIG = {
   normal: { label:'一般用戶', tag:'r-tag-normal', icon:'👤', prefix:'WL',  price:399,
-    breakdown:[ {label:'設計維護費', amount:150, role:'design'}, {label:'分享獎金', amount:49, role:'referral'}, {label:'公積金', amount:200, role:'fund'} ] },
+    breakdown:[ {label:'設計維護費', amount:150, role:'design'}, {label:'分享獎金', amount:49, role:'referral'}, {label:'光耀基金', amount:200, role:'fund'} ] },
   agent:  { label:'代理推薦', tag:'r-tag-student',icon:'🤝', prefix:'WLA', price:399,
-    breakdown:[ {label:'設計維護費', amount:150, role:'design'}, {label:'分享獎金', amount:149, role:'referral'}, {label:'公積金', amount:100, role:'fund'} ] },
+    breakdown:[ {label:'設計維護費', amount:150, role:'design'}, {label:'分享獎金', amount:149, role:'referral'}, {label:'光耀基金', amount:100, role:'fund'} ] },
   manual: { label:'手動新增', tag:'r-tag-manual', icon:'✏️', prefix:'WL',  price:0, breakdown:[] },
 };
 
@@ -516,11 +564,9 @@ function renderBreakdownBox(cfg) {
   const payee = formalReferrer || casualReferrer;
   const rows = cfg.breakdown.map(function(b){
     let who = '';
-    if (b.role === 'design') who = '（給自己）';
-    else if (b.role === 'fund') who = '（公司留存）';
-    else if (b.role === 'referral') who = payee ? '（付給：' + payee + '）' : '（目前無人領取，併入公司）';
+    if (b.role === 'referral' && payee) who = '（給' + payee + '）';
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12px;">'
-      + '<span style="color:var(--text2);">' + (ROLE_ICON[b.role]||'') + ' ' + b.label + '<span style="color:var(--text3);font-size:10px;margin-left:4px;">' + who + '</span></span>'
+      + '<span style="color:var(--text2);">' + (ROLE_ICON[b.role]||'') + ' ' + b.label + (who ? '<span style="color:var(--text3);font-size:10px;margin-left:4px;">' + who + '</span>' : '') + '</span>'
       + '<span style="font-weight:700;color:var(--text);">NT$' + b.amount + '</span>'
       + '</div>';
   }).join('<div style="border-top:1px dashed #F0E8FF;margin:2px 0;"></div>');
@@ -574,7 +620,8 @@ function saveAndSync() {
   saveBtn.disabled = true;
 
   const serialToSync = currentSerial;
-  currentSerial = '';
+  // 注意：這裡不能清空 currentSerial，否則「下載圖片」按鈕在儲存紀錄之後會抓不到資料
+  // （saveBtn 已經 disabled，足以防止同一個序號被重複送出）
 
   syncToSheet(serialToSync, note, cfg.label, referrer, cfg.breakdown, remark).then(function(ok){
     if (ok) {
@@ -584,6 +631,419 @@ function saveAndSync() {
       saveBtn.textContent = '⚠️ 同步失敗，請用備用按鈕';
       showToast('⚠️ 試算表同步失敗，請按「複製到Sheet」手動補貼');
     }
+  });
+}
+
+// ── 批次生成序號 ──
+function batchAddRequest(referrer, count, name, note, attempt) {
+  attempt = attempt || 1;
+  const url = UNLOCK_API_URL
+    + '?action=batchAdd'
+    + '&referrer=' + encodeURIComponent(referrer || '')
+    + '&count=' + count
+    + '&name=' + encodeURIComponent(name || '')
+    + '&note=' + encodeURIComponent(note || '');
+  return fetch(url)
+    .then(function(res){ return res.json(); })
+    .catch(function(){
+      if (attempt < 3) {
+        return new Promise(function(resolve){
+          setTimeout(function(){
+            resolve(batchAddRequest(referrer, count, name, note, attempt + 1));
+          }, 1500 * attempt); // 跟單筆同步一樣的重試節奏，應對 Apps Script 冷啟動
+        });
+      }
+      return { success: false, message: '連線失敗，已重試 3 次仍失敗' };
+    });
+}
+
+function batchGenerate() {
+  const referrer = document.getElementById('batchReferrerSelect').value;
+  const countRaw = document.getElementById('batchCount').value.trim();
+  const count = parseInt(countRaw, 10);
+
+  if (!count || count < 1) { showToast('⚠️ 請輸入要產生的數量'); return; }
+  if (count > 100) { showToast('⚠️ 一次最多只能產生 100 組'); return; }
+
+  const note = document.getElementById('batchNote').value.trim();
+  const btn = document.getElementById('batchGenBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ 產生中...';
+
+  batchAddRequest(referrer, count, '', note).then(function(data){
+    btn.disabled = false;
+    btn.textContent = '⚡ 批次生成';
+
+    if (data && data.success && data.serials && data.serials.length) {
+      const isAgent = !!referrer;
+      const cfg = isAgent ? TYPE_CONFIG.agent : TYPE_CONFIG.normal;
+      const today = new Date().toLocaleDateString('zh-TW');
+
+      data.serials.forEach(function(s){
+        records.push({
+          serial: s,
+          name: '—',
+          type: isAgent ? 'agent' : 'normal',
+          typeLabel: cfg.label,
+          price: cfg.price,
+          date: today,
+          referrer: referrer || '—',
+          remark: note || '—',
+        });
+      });
+      localStorage.setItem('bazi_serial_records', JSON.stringify(records));
+      renderList();
+      updateStats();
+
+      const breakdown = computeBatchBreakdown(referrer, data.serials.length);
+      renderBatchBreakdownBox(breakdown, data.serials.length);
+      lastBatchResult = { serials: data.serials, referrer: referrer, note: note };
+      renderBatchResult(data.serials);
+      showToast('✅ 已產生並寫入 ' + data.serials.length + ' 組序號！');
+    } else {
+      showToast('⚠️ 批次生成失敗：' + ((data && data.message) || '未知錯誤'));
+    }
+  });
+}
+
+// 批次分潤小計：跟單筆的分潤明細同一套單價，乘以這批共幾組
+function computeBatchBreakdown(referrer, count) {
+  const isAgent = !!referrer;
+  const cfg = isAgent ? TYPE_CONFIG.agent : TYPE_CONFIG.normal;
+  return (cfg.breakdown || []).map(function(b){
+    let who = '';
+    if (b.role === 'referral' && referrer) who = '給' + referrer;
+    return { icon: ROLE_ICON[b.role] || '', label: b.label, amount: b.amount * count, who: who, role: b.role };
+  });
+}
+
+function renderBatchBreakdownBox(breakdownArr, count) {
+  const box = document.getElementById('batchBreakdownBox');
+  if (!breakdownArr || !breakdownArr.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const rows = breakdownArr.map(function(b){
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12px;">'
+      + '<span style="color:var(--text2);">' + b.icon + ' ' + b.label + (b.who ? '<span style="color:var(--text3);font-size:10px;margin-left:4px;">（' + b.who + '）</span>' : '') + '</span>'
+      + '<span style="font-weight:700;color:var(--text);">NT$' + b.amount.toLocaleString() + '</span>'
+      + '</div>';
+  }).join('<div style="border-top:1px dashed #F0E8FF;margin:2px 0;"></div>');
+  box.innerHTML = '<div style="font-size:11px;color:var(--text3);margin-bottom:6px;">💰 本批小計（共 ' + count + ' 組 × 單組金額加總）</div>' + rows;
+  box.style.display = 'block';
+}
+
+function renderBatchResult(serials) {
+  const box = document.getElementById('batchResultBox');
+  const copyBtn = document.getElementById('batchCopyBtn');
+  const cardBtn = document.getElementById('batchCardBtn');
+  box.innerHTML = serials.map(function(s){
+    return '<div style="font-family:monospace;font-size:13px;padding:3px 0;color:var(--text);">' + s + '</div>';
+  }).join('');
+  box.style.display = 'block';
+  copyBtn.style.display = 'block';
+  cardBtn.style.display = 'block';
+}
+
+function copyBatchResult() {
+  const box = document.getElementById('batchResultBox');
+  const text = box.innerText.trim();
+  if (!text) return;
+  try { navigator.clipboard.writeText(text); } catch(e){}
+  showToast('📋 已複製整批序號！');
+}
+
+// ── 圖卡產生（單筆序號 / 批次小計都能存成 PNG 傳給老師核對） ──
+const CARD_WIDTH = 680;
+const CARD_SCALE = 2; // 放大兩倍輸出，存下來比較不會模糊
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
+
+function buildCardData_Single() {
+  if (!currentSerial) return null;
+  const cfg = TYPE_CONFIG[currentType];
+  const formalReferrer = getSelectedReferrer();
+  const remarkEl = document.getElementById('remarkNote');
+  const casualReferrer = remarkEl ? remarkEl.value.trim() : '';
+  const payee = formalReferrer || casualReferrer;
+  const breakdown = (cfg.breakdown || []).map(function(b){
+    let who = '';
+    if (b.role === 'referral' && payee) who = '給' + payee;
+    return { icon: ROLE_ICON[b.role] || '', label: b.label, amount: b.amount, who: who };
+  });
+  return {
+    mode: 'single',
+    serial: currentSerial,
+    typeIcon: cfg.icon,
+    typeLabel: cfg.label,
+    price: cfg.price,
+    breakdown: breakdown,
+    referrer: formalReferrer || casualReferrer || '',
+    date: new Date().toLocaleDateString('zh-TW'),
+  };
+}
+
+function buildCardData_Batch(serials, referrer, note) {
+  const breakdown = computeBatchBreakdown(referrer, serials.length);
+  const isAgent = !!referrer;
+  const cfg = isAgent ? TYPE_CONFIG.agent : TYPE_CONFIG.normal;
+  return {
+    mode: 'batch',
+    serials: serials,
+    count: serials.length,
+    typeIcon: cfg.icon,
+    typeLabel: cfg.label,
+    price: cfg.price * serials.length,
+    breakdown: breakdown,
+    referrer: referrer || '',
+    note: note || '',
+    date: new Date().toLocaleDateString('zh-TW'),
+  };
+}
+
+function drawCard(data) {
+  // ── 版面常數（高度計算跟實際畫圖共用同一組數字，避免算錯導致文字被切到）──
+  const W = CARD_WIDTH;
+  const padX = 32;
+  const cardX = padX;
+  const cardW = W - padX * 2;
+  const HEADER_H = 130;     // 頂部品牌區
+  const CARD_PAD = 28;      // 卡片內距（上下都用這個）
+  const PILL_H = 32;
+  const GAP_AFTER_TITLE = 14;
+  const GAP_AFTER_PILL = 22;
+  const NOTE_LINE_H = 24;
+  const DASH_GAP_H = 30;
+  const BREAKDOWN_HEADER_H = 26;
+  const ROW_H = 38;
+  const GAP_AFTER_BREAKDOWN = 14;
+  const SERIALS_HEADER_H = 26;
+  const SERIAL_ROW_H = 24;
+  const GAP_AFTER_SERIALS = 14;
+  const FOOTER_LINE_H = 22;
+  const BOTTOM_SAFETY = 40; // 多留一點底部空間，避免文字貼邊
+  const COLS = 3;
+
+  let bodyH = (data.mode === 'single' ? 56 : 40) + GAP_AFTER_TITLE + PILL_H + GAP_AFTER_PILL;
+  if (data.mode === 'batch' && data.note) bodyH += NOTE_LINE_H;
+
+  const breakdownH = BREAKDOWN_HEADER_H + data.breakdown.length * ROW_H + GAP_AFTER_BREAKDOWN;
+
+  let serialRows = 0;
+  let serialsH = 0;
+  if (data.mode === 'batch') {
+    serialRows = Math.ceil(data.serials.length / COLS);
+    serialsH = SERIALS_HEADER_H + serialRows * SERIAL_ROW_H + GAP_AFTER_SERIALS;
+  }
+
+  let footerH = FOOTER_LINE_H;
+  if (data.referrer) footerH += FOOTER_LINE_H;
+
+  const cardInnerH = CARD_PAD + bodyH + DASH_GAP_H + breakdownH + serialsH + footerH + CARD_PAD + BOTTOM_SAFETY;
+  const totalHeight = HEADER_H + cardInnerH + 40;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W * CARD_SCALE;
+  canvas.height = totalHeight * CARD_SCALE;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(CARD_SCALE, CARD_SCALE);
+
+  // 背景
+  const bgGrad = ctx.createLinearGradient(0, 0, W, totalHeight);
+  bgGrad.addColorStop(0, '#FFF0F8');
+  bgGrad.addColorStop(0.5, '#F5F0FF');
+  bgGrad.addColorStop(1, '#F0FFF8');
+  ctx.fillStyle = bgGrad;
+  roundRectPath(ctx, 0, 0, W, totalHeight, 28);
+  ctx.fill();
+
+  // 頂部品牌
+  ctx.textAlign = 'center';
+  ctx.font = '30px sans-serif';
+  ctx.fillStyle = '#A855F7';
+  ctx.fillText('🔮', W / 2, 46);
+
+  const titleGrad = ctx.createLinearGradient(W / 2 - 120, 0, W / 2 + 120, 0);
+  titleGrad.addColorStop(0, '#FF6B9D');
+  titleGrad.addColorStop(1, '#A855F7');
+  ctx.fillStyle = titleGrad;
+  ctx.font = 'bold 22px "Noto Sans TC", sans-serif';
+  ctx.fillText(data.mode === 'single' ? '序號確認卡' : '批次序號小計卡', W / 2, 80);
+
+  ctx.fillStyle = '#A89BC2';
+  ctx.font = '12px "Noto Sans TC", sans-serif';
+  ctx.fillText('光耀命理系統 · 序號工坊', W / 2, 100);
+
+  // 主卡片白底
+  const cardY = HEADER_H;
+  ctx.fillStyle = '#FFFFFF';
+  roundRectPath(ctx, cardX, cardY, cardW, cardInnerH, 20);
+  ctx.fill();
+
+  // 虛線框只圍住最上面序號/標籤區，呼應網頁上的樣式
+  ctx.save();
+  ctx.setLineDash([6, 6]);
+  ctx.strokeStyle = '#C4B5FD';
+  ctx.lineWidth = 2;
+  roundRectPath(ctx, cardX + 12, cardY + 12, cardW - 24, bodyH + CARD_PAD, 16);
+  ctx.stroke();
+  ctx.restore();
+
+  let cur = cardY + CARD_PAD;
+
+  if (data.mode === 'single') {
+    ctx.fillStyle = '#A855F7';
+    ctx.font = 'bold 30px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(data.serial, W / 2, cur + 30);
+    cur += 56;
+  } else {
+    ctx.fillStyle = '#2D1B69';
+    ctx.font = 'bold 20px "Noto Sans TC", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('共產生 ' + data.count + ' 組序號', W / 2, cur + 26);
+    cur += 40;
+  }
+
+  cur += GAP_AFTER_TITLE;
+
+  const tagText = data.typeIcon + ' ' + data.typeLabel + ' · NT$' + data.price.toLocaleString();
+  ctx.font = '13px "Noto Sans TC", sans-serif';
+  const tagW = ctx.measureText(tagText).width + 32;
+  const tagX = W / 2 - tagW / 2;
+  ctx.fillStyle = '#F0E4FF';
+  roundRectPath(ctx, tagX, cur, tagW, PILL_H, PILL_H / 2);
+  ctx.fill();
+  ctx.fillStyle = '#A855F7';
+  ctx.font = 'bold 13px "Noto Sans TC", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(tagText, W / 2, cur + 21);
+  cur += PILL_H + GAP_AFTER_PILL;
+
+  if (data.mode === 'batch' && data.note) {
+    ctx.fillStyle = '#6B5B95';
+    ctx.font = '12px "Noto Sans TC", sans-serif';
+    const noteDisplay = data.note.length > 40 ? data.note.slice(0, 40) + '…' : data.note;
+    ctx.fillText('備註：' + noteDisplay, W / 2, cur);
+    cur += NOTE_LINE_H;
+  }
+
+  // 分隔虛線
+  ctx.save();
+  ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = '#F0E8FF';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cardX + 24, cur + 6);
+  ctx.lineTo(cardX + cardW - 24, cur + 6);
+  ctx.stroke();
+  ctx.restore();
+  cur += DASH_GAP_H;
+
+  // 分潤明細
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#2D1B69';
+  ctx.font = 'bold 14px "Noto Sans TC", sans-serif';
+  ctx.fillText(data.mode === 'batch' ? '💰 本批分潤小計' : '💰 分潤明細', cardX + 24, cur);
+  cur += BREAKDOWN_HEADER_H;
+
+  data.breakdown.forEach(function (b) {
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#6B5B95';
+    ctx.font = '13px "Noto Sans TC", sans-serif';
+    ctx.fillText(b.icon + ' ' + b.label, cardX + 24, cur + 14);
+    if (b.who) {
+      ctx.fillStyle = '#A89BC2';
+      ctx.font = '11px "Noto Sans TC", sans-serif';
+      ctx.fillText('（' + b.who + '）', cardX + 24, cur + 30);
+    }
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#2D1B69';
+    ctx.font = 'bold 16px "Noto Sans TC", sans-serif';
+    ctx.fillText('NT$' + b.amount.toLocaleString(), cardX + cardW - 24, cur + 22);
+    cur += ROW_H;
+  });
+
+  cur += GAP_AFTER_BREAKDOWN;
+
+  if (data.mode === 'batch') {
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#2D1B69';
+    ctx.font = 'bold 14px "Noto Sans TC", sans-serif';
+    ctx.fillText('📋 序號清單', cardX + 24, cur);
+    cur += SERIALS_HEADER_H;
+
+    const colW = (cardW - 48) / COLS;
+    ctx.font = '12px monospace';
+    ctx.fillStyle = '#2D1B69';
+    data.serials.forEach(function (s, idx) {
+      const col = idx % COLS;
+      const row = Math.floor(idx / COLS);
+      ctx.textAlign = 'left';
+      ctx.fillText(s, cardX + 24 + col * colW, cur + row * SERIAL_ROW_H);
+    });
+    cur += serialRows * SERIAL_ROW_H + GAP_AFTER_SERIALS;
+  }
+
+  // 推薦人 / 日期
+  ctx.textAlign = 'left';
+  ctx.font = '12px "Noto Sans TC", sans-serif';
+  ctx.fillStyle = '#6B5B95';
+  if (data.referrer) {
+    ctx.fillText('🤝 推薦老師/夥伴：' + data.referrer, cardX + 24, cur + 14);
+    cur += FOOTER_LINE_H;
+  }
+  ctx.fillText('📅 產生日期：' + data.date, cardX + 24, cur + 14);
+
+  // 底部小字
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#C4B5FD';
+  ctx.font = '11px "Noto Sans TC", sans-serif';
+  ctx.fillText('— 本卡僅供雙方核對序號與分潤金額使用 —', W / 2, totalHeight - 18);
+
+  return canvas;
+}
+
+function downloadCanvas(canvas, filename) {
+  canvas.toBlob(function (blob) {
+    if (!blob) { showToast('⚠️ 圖卡產生失敗'); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  }, 'image/png');
+}
+
+function saveSerialCard() {
+  const data = buildCardData_Single();
+  if (!data) { showToast('⚠️ 請先產生序號'); return; }
+  showToast('📷 圖片產生中...');
+  (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(function () {
+    const canvas = drawCard(data);
+    downloadCanvas(canvas, '序號卡_' + data.serial + '.png');
+    showToast('📷 圖片已下載！');
+  });
+}
+
+function saveBatchCard() {
+  if (!lastBatchResult) { showToast('⚠️ 請先批次生成序號'); return; }
+  const data = buildCardData_Batch(lastBatchResult.serials, lastBatchResult.referrer, lastBatchResult.note);
+  showToast('📷 圖片產生中...');
+  (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(function () {
+    const canvas = drawCard(data);
+    downloadCanvas(canvas, '批次序號卡_' + data.count + '組_' + data.date.replace(/\//g, '-') + '.png');
+    showToast('📷 圖片已下載！');
   });
 }
 
@@ -665,7 +1125,7 @@ function updateStats() {
     const cfg = TYPE_CONFIG[r.type] || TYPE_CONFIG.normal;
     (cfg.breakdown || []).forEach(function(b){
       if (b.role === 'referral') referralPaid += b.amount;
-      else companyTake += b.amount; // 設計維護費 + 公積金 都算公司實收
+      else companyTake += b.amount; // 設計維護費 + 光耀基金 都算公司實收
     });
   });
   document.getElementById('statRevenue').textContent = 'NT$' + companyTake.toLocaleString();
@@ -679,7 +1139,7 @@ function showToast(msg) {
   setTimeout(()=>t.classList.remove('show'), 2000);
 }
 
-renderReferrerOptions();
+renderAllReferrerSelects();
 updateAutoType();
 renderList();
 updateStats();
